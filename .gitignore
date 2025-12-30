@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.log
+dashboard.log
+*.bak
+CFW300_Archive/
+venv/
+.env
+.vscode/
+*.swp
