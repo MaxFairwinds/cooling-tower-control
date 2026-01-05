@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cooling Tower SCADA - WebSocket Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 {
+            color: #38bdf8;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .status {
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .status h2 {
+            color: #38bdf8;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .metric {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 3px solid #38bdf8;
+        }
+        .metric-label {
+            font-size: 10px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+        }
+        .metric-unit {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .connection {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .connected {
+            background: #10b981;
+            color: #fff;
+        }
+        .disconnected {
+            background: #ef4444;
+            color: #fff;
+        }
+        .controls {
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        button {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0ea5e9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 COOLING TOWER SCADA - LIVE DATA TEST</h1>
+        
+        <div id="connection" class="connection disconnected">DISCONNECTED</div>
+        
+        <div class="controls">
+            <h2>FAN CONTROLS</h2>
+            <button onclick="setFanHz(0)">Fan OFF</button>
+            <button onclick="setFanHz(20)">Fan 20Hz</button>
+            <button onclick="setFanHz(30)">Fan 30Hz</button>
+            <button onclick="setFanHz(45)">Fan 45Hz</button>
+            <button onclick="setFanMode('auto')">Auto Mode</button>
+            <button onclick="setFanMode('manual')">Manual Mode</button>
+        </div>
+        
+        <div class="status">
+            <h2>📊 Sensors (Real-time)</h2>
+            <div class="grid">
+                <div class="metric">
+                    <div class="metric-label">Basin Temperature</div>
+                    <div class="metric-value" id="basin-temp">--</div>
+                    <div class="metric-unit">°F</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">System Pressure</div>
+                    <div class="metric-value" id="pressure">--</div>
+                    <div class="metric-unit">PSI</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Outdoor Temp</div>
+                    <div class="metric-value" id="outdoor-temp">--</div>
+                    <div class="metric-unit">°F</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Humidity</div>
+                    <div class="metric-value" id="humidity">--</div>
+                    <div class="metric-unit">%</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status">
+            <h2>⚡ VFD Status</h2>
+            <div class="grid">
+                <div class="metric">
+                    <div class="metric-label">Fan</div>
+                    <div class="metric-value" id="fan-hz">--</div>
+                    <div class="metric-unit"><span id="fan-state">--</span> Hz</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Fan Current</div>
+                    <div class="metric-value" id="fan-current">--</div>
+                    <div class="metric-unit">A</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Pump Primary</div>
+                    <div class="metric-value" id="pump1-hz">--</div>
+                    <div class="metric-unit"><span id="pump1-state">--</span> Hz</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Pump Backup</div>
+                    <div class="metric-value" id="pump2-hz">--</div>
+                    <div class="metric-unit"><span id="pump2-state">--</span> Hz</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status">
+            <h2>🧮 Calculated Values</h2>
+            <div class="grid">
+                <div class="metric">
+                    <div class="metric-label">Return Temperature</div>
+                    <div class="metric-value" id="return-temp">--</div>
+                    <div class="metric-unit">°F (estimated)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Heat Load</div>
+                    <div class="metric-value" id="heat-load">--</div>
+                    <div class="metric-unit">kW</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Flow Rate</div>
+                    <div class="metric-value" id="gpm">--</div>
+                    <div class="metric-unit">GPM (estimated)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cooling Tower Approach</div>
+                    <div class="metric-value" id="approach">--</div>
+                    <div class="metric-unit">°F</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let ws;
+        let reconnectInterval;
+        
+        function connect() {
+            ws = new WebSocket('ws://localhost:8000/ws');
+            
+            ws.onopen = () => {
+                console.log('✅ WebSocket connected');
+                document.getElementById('connection').textContent = 'CONNECTED';
+                document.getElementById('connection').className = 'connection connected';
+                clearInterval(reconnectInterval);
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                updateUI(data);
+            };
+            
+            ws.onclose = () => {
+                console.log('❌ WebSocket disconnected');
+                document.getElementById('connection').textContent = 'DISCONNECTED';
+                document.getElementById('connection').className = 'connection disconnected';
+                
+                // Try to reconnect
+                reconnectInterval = setInterval(() => {
+                    console.log('Reconnecting...');
+                    connect();
+                }, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        function updateUI(data) {
+            // Sensors
+            document.getElementById('basin-temp').textContent = data.sensors.basin_temp_f.toFixed(1);
+            document.getElementById('pressure').textContent = data.sensors.pressure_psi.toFixed(1);
+            document.getElementById('outdoor-temp').textContent = data.weather.outdoor_temp_f.toFixed(1);
+            document.getElementById('humidity').textContent = data.weather.humidity_pct.toFixed(0);
+            
+            // VFDs
+            document.getElementById('fan-hz').textContent = data.fan.frequency.toFixed(1);
+            document.getElementById('fan-state').textContent = data.fan.state;
+            document.getElementById('fan-current').textContent = data.fan.current.toFixed(1);
+            
+            document.getElementById('pump1-hz').textContent = data.pump_primary.frequency.toFixed(1);
+            document.getElementById('pump1-state').textContent = data.pump_primary.state;
+            
+            document.getElementById('pump2-hz').textContent = data.pump_backup.frequency.toFixed(1);
+            document.getElementById('pump2-state').textContent = data.pump_backup.state;
+            
+            // Calculated
+            document.getElementById('return-temp').textContent = data.calculated.return_temp_f.toFixed(1);
+            document.getElementById('heat-load').textContent = data.calculated.heat_load_kw.toFixed(1);
+            document.getElementById('gpm').textContent = data.calculated.gpm.toFixed(0);
+            document.getElementById('approach').textContent = data.calculated.approach_f.toFixed(1);
+        }
+        
+        async function setFanHz(hz) {
+            const response = await fetch(`http://localhost:8000/api/fan/setpoint?hz=${hz}`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+            console.log('Fan setpoint:', result);
+        }
+        
+        async function setFanMode(mode) {
+            const response = await fetch(`http://localhost:8000/api/fan/mode?mode=${mode}`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+            console.log('Fan mode:', result);
+        }
+        
+        // Connect on page load
+        connect();
+    </script>
+</body>
+</html>

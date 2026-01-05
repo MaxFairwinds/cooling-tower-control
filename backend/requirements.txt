@@ -1,0 +1,23 @@
+# FastAPI Backend Requirements
+# Install with: pip install -r requirements.txt
+
+# Core framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Data validation
+pydantic==2.5.3
+
+# Async support
+aiofiles==23.2.1
+
+# HTTP client
+requests==2.31.0
+
+# Hardware (reuse existing requirements)
+pyserial==3.5
+adafruit-circuitpython-ads1x15==2.2.21
+
+# Logging
+python-json-logger==2.0.7

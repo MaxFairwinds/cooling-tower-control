@@ -1,0 +1,95 @@
+# Caddy Configuration for Cooling Tower SCADA
+# Production setup with reverse proxy
+
+# Main server block
+:80 {
+    # Server name (optional - for Tailscale Funnel)
+    # If using Tailscale Funnel, this will be auto-configured
+    
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+        format console
+    }
+    
+    # Compression
+    encode gzip zstd
+    
+    # Security headers
+    header {
+        # Remove server identification
+        -Server
+        
+        # Security headers
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        
+        # Cache control for API endpoints
+        Cache-Control "no-cache, no-store, must-revalidate"
+    }
+    
+    # WebSocket endpoint (must be first to avoid file_server catching it)
+    @websocket {
+        path /ws
+    }
+    handle @websocket {
+        reverse_proxy localhost:8000
+    }
+    
+    # API endpoints
+    @api {
+        path /api/*
+    }
+    handle @api {
+        reverse_proxy localhost:8000 {
+            # Increase timeout for Modbus operations
+            timeout 30s
+            
+            # Health check
+            health_uri /api/health
+            health_interval 30s
+            health_timeout 10s
+        }
+    }
+    
+    # Legacy Flask backup dashboard
+    @backup {
+        path /backup/*
+    }
+    handle @backup {
+        reverse_proxy localhost:5000
+    }
+    
+    # React production build (main UI)
+    handle {
+        # Serve from dist folder
+        root * /home/pi/cooling-tower-ui/dist
+        
+        # Try files, fallback to index.html for SPA routing
+        try_files {path} /index.html
+        
+        # Static file server
+        file_server
+        
+        # Cache static assets
+        @static {
+            path *.js *.css *.woff *.woff2 *.ttf *.ico *.png *.jpg *.svg
+        }
+        header @static {
+            Cache-Control "public, max-age=31536000, immutable"
+        }
+    }
+    
+    # Error handling
+    handle_errors {
+        respond "{err.status_code} {err.status_text}"
+    }
+}
+
+# Development configuration (optional)
+# Uncomment for local dev with Vite
+# :3000 {
+#     reverse_proxy localhost:5173
+# }

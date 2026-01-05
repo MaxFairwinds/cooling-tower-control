@@ -1,0 +1,5 @@
+{
+  "name": "Cooling Tower SCADA v6",
+  "description": "Professional SCADA interface for a Cooling Tower Control System with real-time data simulation and VFD controls.",
+  "requestFramePermissions": []
+}
