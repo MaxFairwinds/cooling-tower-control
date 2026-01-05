@@ -275,6 +275,32 @@ export const App: React.FC = () => {
   const [pumpSelection, setPumpSelection] = useState<PumpSelection>('P-101');
   const [towerSelection, setTowerSelection] = useState<TowerSelection>('OFF');
 
+  // Show loading screen until first data arrives
+  if (!backendData && isConnected) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400 font-bold">Loading system data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show offline screen if not connected and no cached data
+  if (!backendData && !isConnected) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <div className="text-center">
+          <WifiOff size={48} className="text-red-500 mx-auto mb-4" />
+          <p className="text-red-400 font-bold text-xl mb-2">Backend Offline</p>
+          <p className="text-slate-500">Waiting for connection...</p>
+          {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
   // Derived state from backend data
   const [vfdPrimary, setVfdPrimary] = useState<VFDState>({
     id: 'p1', name: 'Primary Pump', status: 'Stopped', frequency: 0, current: 0, setpoint: 45, manualMode: false
@@ -366,6 +392,10 @@ export const App: React.FC = () => {
 
   // Control handlers - call API instead of local state
   const handlePumpSelection = async (value: PumpSelection) => {
+    if (!isConnected) {
+      console.warn('[Control] Cannot control pump while offline');
+      return;
+    }
     try {
       if (value === 'OFF') {
         await api.pump.stop();
@@ -381,10 +411,15 @@ export const App: React.FC = () => {
       setPumpSelection(value); // Update UI immediately
     } catch (err) {
       console.error('[Control] Pump selection failed:', err);
+      alert(`Pump control failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
   const handleTowerSelection = async (value: TowerSelection) => {
+    if (!isConnected) {
+      console.warn('[Control] Cannot control tower while offline');
+      return;
+    }
     try {
       if (value === 'ON') {
         // In manual mode, start fan at current setpoint
@@ -398,23 +433,34 @@ export const App: React.FC = () => {
       setTowerSelection(value); // Update UI immediately
     } catch (err) {
       console.error('[Control] Tower selection failed:', err);
+      alert(`Tower control failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
   const handleFanModeToggle = async () => {
+    if (!isConnected) {
+      console.warn('[Control] Cannot change fan mode while offline');
+      return;
+    }
     try {
       const newMode = vfdTower.manualMode ? 'auto' : 'manual';
       await api.fan.setMode(newMode);
     } catch (err) {
       console.error('[Control] Fan mode toggle failed:', err);
+      alert(`Fan mode change failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
   const handleFanSetHz = async (hz: number) => {
+    if (!isConnected) {
+      console.warn('[Control] Cannot set fan frequency while offline');
+      return;
+    }
     try {
       await api.fan.setFrequency(hz);
     } catch (err) {
       console.error('[Control] Fan frequency set failed:', err);
+      alert(`Fan frequency set failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -520,19 +566,21 @@ export const App: React.FC = () => {
   const activePump = system.activePump === 'PRIMARY' ? vfdPrimary : vfdBackup;
   const flowFactor = activePump.status === 'Running' ? (activePump.frequency / 60) : 0;
   
-  const visualDeltaT = (system.isRunning && flowFactor > 0.1) ? 10.0 : 1.0; 
-  const returnTemp = supplyTemp + visualDeltaT;
+  // Use calculated delta-T from backend
+  const returnTemp = backendData?.calculated.return_temp_f || (supplyTemp + 1.0);
+  const visualDeltaT = returnTemp - supplyTemp;
   
   const supplyColor = getSupplyColor(supplyTemp);
   const returnColor = getReturnColor(returnTemp);
   
-  // Simulated Pressure: Static head 15psi, Pump Boost up to 35psi additional
-  const activeFreq = Math.max(vfdPrimary.frequency, vfdBackup.frequency);
-  const basePressure = 15 + (activeFreq / 60) * 35; 
-  const dischargePressure = basePressure + (Math.random() - 0.5); // Add jitter
+  // Use real pressure sensor from backend
+  const dischargePressure = backendData?.sensors.pressure_psi || 0;
 
-  // Calculate Wet Bulb for the UI Rendering
-  const currentWetBulb = system.outdoorTemp - ((100 - system.humidity) * 0.3);
+  // Use calculated wet bulb from backend
+  const currentWetBulb = backendData?.weather.wet_bulb_f || 0;
+  
+  // Get flow rate from backend calculations
+  const currentGPM = backendData?.calculated.gpm || 0;
 
   // --- STEAM INTENSITY CALCULATION ---
   // Steam Plume = (Water Temp - Outdoor Temp) * Airflow
@@ -694,9 +742,15 @@ export const App: React.FC = () => {
                     ) : (
                         <>
                             <WifiOff size={14} className="text-red-500" />
-                            <span className="text-[10px] text-red-400 font-bold">OFFLINE</span>
+                            <span className="text-[10px] text-red-400 font-bold">{error ? 'ERROR' : 'OFFLINE'}</span>
                         </>
                     )}
+                </div>
+
+                {/* FLOW RATE (GPM) */}
+                <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-slate-400 font-bold">FLOW RATE</span>
+                    <span className="text-xs font-mono font-bold text-cyan-400">{currentGPM.toFixed(0)} GPM</span>
                 </div>
 
                 {/* WEATHER DATA (Read-only from API) */}
@@ -709,6 +763,12 @@ export const App: React.FC = () => {
                 <div className="flex flex-col items-center">
                     <span className="text-[10px] text-slate-400 font-bold">HUMIDITY</span>
                     <span className="text-xs font-mono font-bold text-sky-400">{system.humidity.toFixed(0)}%</span>
+                </div>
+
+                {/* APPROACH TEMPERATURE */}
+                <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-slate-400 font-bold">APPROACH</span>
+                    <span className="text-xs font-mono font-bold text-emerald-400">{(backendData?.calculated.approach_f || 0).toFixed(1)}°F</span>
                 </div>
 
                 {/* HEAT LOAD (Calculated from sensors) */}
