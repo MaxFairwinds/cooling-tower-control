@@ -101,9 +101,13 @@ class SensorManager:
         Read all sensors.
         
         Returns:
-            Dictionary with pressure and temperature
+            Dictionary with pressure and temperature in both C and F
         """
+        temp_c = self.read_temperature()
+        temp_f = (temp_c * 9/5) + 32
+        
         return {
             'pressure_psi': self.read_pressure(),
-            'temperature_c': self.read_temperature()
+            'temperature_c': temp_c,
+            'temperature_f': temp_f
         }
