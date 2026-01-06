@@ -268,9 +268,6 @@ const ThermalStack: React.FC<{
 
 
 export const App: React.FC = () => {
-  // SAFETY: Read-only mode during testing - disable all controls
-  const READ_ONLY_MODE = true;
-  
   // Connect to WebSocket backend
   const { data: backendData, isConnected, error } = useWebSocket();
   
@@ -395,10 +392,6 @@ export const App: React.FC = () => {
 
   // Control handlers - call API instead of local state
   const handlePumpSelection = async (value: PumpSelection) => {
-    if (READ_ONLY_MODE) {
-      alert('⚠️ READ-ONLY MODE: Controls are disabled during testing. System remains in manual mode.');
-      return;
-    }
     if (!isConnected) {
       console.warn('[Control] Cannot control pump while offline');
       return;
@@ -419,11 +412,7 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error('[Control] Pump selection failed:', err);
       alert(`Pump control failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }READ_ONLY_MODE) {
-      alert('⚠️ READ-ONLY MODE: Controls are disabled during testing. System remains in manual mode.');
-      return;
     }
-    if (
   };
 
   const handleTowerSelection = async (value: TowerSelection) => {
@@ -445,11 +434,7 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error('[Control] Tower selection failed:', err);
       alert(`Tower control failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }READ_ONLY_MODE) {
-      alert('⚠️ READ-ONLY MODE: Controls are disabled during testing. System remains in manual mode.');
-      return;
     }
-    if (
   };
 
   const handleFanModeToggle = async () => {
@@ -463,11 +448,7 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error('[Control] Fan mode toggle failed:', err);
       alert(`Fan mode change failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }READ_ONLY_MODE) {
-      alert('⚠️ READ-ONLY MODE: Controls are disabled during testing. System remains in manual mode.');
-      return;
     }
-    if (
   };
 
   const handleFanSetHz = async (hz: number) => {
