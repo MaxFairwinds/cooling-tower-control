@@ -275,33 +275,7 @@ export const App: React.FC = () => {
   const [pumpSelection, setPumpSelection] = useState<PumpSelection>('P-101');
   const [towerSelection, setTowerSelection] = useState<TowerSelection>('OFF');
 
-  // Show loading screen until first data arrives
-  if (!backendData && isConnected) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-900">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-400 font-bold">Loading system data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show offline screen if not connected and no cached data
-  if (!backendData && !isConnected) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-900">
-        <div className="text-center">
-          <WifiOff size={48} className="text-red-500 mx-auto mb-4" />
-          <p className="text-red-400 font-bold text-xl mb-2">Backend Offline</p>
-          <p className="text-slate-500">Waiting for connection...</p>
-          {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  // Derived state from backend data
+  // Derived state from backend data - MUST be declared before any returns
   const [vfdPrimary, setVfdPrimary] = useState<VFDState>({
     id: 'p1', name: 'Primary Pump', status: 'Stopped', frequency: 0, current: 0, setpoint: 45, manualMode: false
   });
@@ -389,6 +363,32 @@ export const App: React.FC = () => {
       console.error('[App] Failed to map backend data:', err);
     }
   }, [backendData]);
+
+  // Show loading screen until first data arrives
+  if (!backendData && isConnected) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400 font-bold">Loading system data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show offline screen if not connected and no cached data
+  if (!backendData && !isConnected) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <div className="text-center">
+          <WifiOff size={48} className="text-red-500 mx-auto mb-4" />
+          <p className="text-red-400 font-bold text-xl mb-2">Backend Offline</p>
+          <p className="text-slate-500">Waiting for connection...</p>
+          {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+        </div>
+      </div>
+    );
+  }
 
   // Control handlers - call API instead of local state
   const handlePumpSelection = async (value: PumpSelection) => {

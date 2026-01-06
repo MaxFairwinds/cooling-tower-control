@@ -25,7 +25,7 @@ export interface SystemData {
     current: number;
     fault_code: number;
   };
-  active_pump: 'primary' | 'backup';
+  active_pump: 'primary' | 'backup' | 'failed';
   weather: {
     outdoor_temp_f: number;
     humidity_pct: number;
@@ -50,7 +50,6 @@ interface UseWebSocketResult {
   reconnect: () => void;
 }
 
-const WEBSOCKET_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
 const RECONNECT_INTERVAL = 3000; // 3 seconds
 
 export function useWebSocket(): UseWebSocketResult {
@@ -64,9 +63,10 @@ export function useWebSocket(): UseWebSocketResult {
 
   const connect = useCallback(() => {
     try {
-      console.log(`[WebSocket] Connecting to ${WEBSOCKET_URL}...`);
+      const wsUrl = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}/ws`;
+      console.log(`[WebSocket] Connecting to ${wsUrl}...`);
       
-      const ws = new WebSocket(WEBSOCKET_URL);
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {

@@ -385,4 +385,4 @@ if __name__ == '__main__':
     threading.Thread(target=vfd_update_thread, daemon=True).start()
     
     # Run Flask app
-    app.run(host='0.0.0.0', port=8000, debug=False)
+    app.run(host='0.0.0.0', port=8001, debug=False)
