@@ -1,0 +1,14 @@
+[Unit]
+Description=Cooling Tower Data Logger
+After=network.target
+
+[Service]
+Type=simple
+User=max
+WorkingDirectory=/home/max/cooling-tower/backend
+ExecStart=/usr/bin/python3 /home/max/cooling-tower/backend/data_logger.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

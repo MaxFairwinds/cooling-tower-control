@@ -211,8 +211,12 @@
                     <span class="metric-value" id="pressure">-- psi</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Temperature</span>
-                    <span class="metric-value" id="temperature">-- °C</span>
+                    <span class="metric-label">Water Temperature</span>
+                    <span class="metric-value" id="temperature">-- °F</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Air Temperature</span>
+                    <span class="metric-value" id="airTemperature">-- °F</span>
                 </div>
             </div>
             
@@ -334,7 +338,8 @@
                 
                 // Sensors
                 document.getElementById('pressure').textContent = data.sensors.pressure_psi.toFixed(2) + ' psi';
-                document.getElementById('temperature').textContent = data.sensors.temperature_c.toFixed(1) + ' °C';
+                document.getElementById('temperature').textContent = data.sensors.temperature_f.toFixed(1) + ' °F';
+                document.getElementById('airTemperature').textContent = data.sensors.air_temperature_f.toFixed(1) + ' °F';
                 
                 // Fan VFD
                 updateVFDDisplay('fan', data.fan);

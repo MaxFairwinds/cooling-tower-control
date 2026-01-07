@@ -70,7 +70,7 @@ class CoolingTowerSystem:
         self.auto_mode = False
         self.system_state = {
             'timestamp': None,
-            'sensors': {'pressure_psi': 0, 'temperature_f': 0},
+            'sensors': {'pressure_psi': 0, 'temperature_f': 0, 'air_temperature_f': 0},
             'fan': {'state': 'Unknown', 'frequency': 0, 'current': 0, 'fault': 0},
             'pump_primary': {'state': 'Unknown', 'frequency': 0, 'current': 0, 'fault': 0},
             'pump_backup': {'state': 'Unknown', 'frequency': 0, 'current': 0, 'fault': 0},
