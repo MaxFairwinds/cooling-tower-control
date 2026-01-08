@@ -48,6 +48,16 @@ export const api = {
         body: JSON.stringify({ hz }),
       }),
 
+    start: () =>
+      request('/api/fan/start', {
+        method: 'POST',
+      }),
+
+    stop: () =>
+      request('/api/fan/stop', {
+        method: 'POST',
+      }),
+
     setAutoConfig: (targetTemp: number, hysteresis: number) =>
       request('/api/fan/auto_config', {
         method: 'POST',

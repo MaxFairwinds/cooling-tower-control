@@ -298,13 +298,17 @@ export const App: React.FC = () => {
     lastUpdate: new Date(),
   });
 
+  // Pending/loading states for controls
+  const [pendingTowerCmd, setPendingTowerCmd] = useState<'ON' | 'OFF' | null>(null);
+  const [pendingPumpCmd, setPendingPumpCmd] = useState<'PRIMARY' | 'BACKUP' | null>(null);
+
   // Map WebSocket data to UI state
   useEffect(() => {
     if (!backendData) return;
 
     try {
       // Map fan VFD
-      setVfdTower({
+      const newFanState = {
         id: 'ct1',
         name: 'Tower Fan',
         status: backendData.fan.state as any,
@@ -312,7 +316,15 @@ export const App: React.FC = () => {
         current: backendData.fan.current,
         setpoint: backendData.fan_setpoint,
         manualMode: !backendData.fan_auto_mode
-      });
+      };
+      setVfdTower(newFanState);
+
+      // Clear pending state if VFD state matches our command
+      if (pendingTowerCmd === 'ON' && backendData.fan.state === 'Running') {
+        setPendingTowerCmd(null);
+      } else if (pendingTowerCmd === 'OFF' && backendData.fan.state === 'Stopped') {
+        setPendingTowerCmd(null);
+      }
 
       // Map pump VFDs
       setVfdPrimary({
@@ -336,10 +348,11 @@ export const App: React.FC = () => {
       });
 
       // Update system state
+      const newActivePump = backendData.active_pump === 'primary' ? 'PRIMARY' : 'BACKUP';
       setSystem({
         isRunning: backendData.pump_primary.state === 'Running' || backendData.pump_backup.state === 'Running',
         autoControl: backendData.fan_auto_mode,
-        activePump: backendData.active_pump === 'primary' ? 'PRIMARY' : 'BACKUP',
+        activePump: newActivePump,
         temperature: backendData.sensors.basin_temp_f,
         basinLevel: 0, // No sensor yet
         outdoorTemp: backendData.weather.outdoor_temp_f,
@@ -349,14 +362,26 @@ export const App: React.FC = () => {
       });
 
       // Sync selectors with backend state
-      setPumpSelection(
+      const newPumpSelection = 
         backendData.pump_primary.state === 'Running' ? 'P-101' :
         backendData.pump_backup.state === 'Running' ? 'P-102' :
-        'OFF'
-      );
+        'OFF';
+      setPumpSelection(newPumpSelection);
 
+      // Clear pump pending state if VFD matches command
+      if (pendingPumpCmd) {
+        if (pendingPumpCmd === 'P-101' && newPumpSelection === 'P-101') {
+          setPendingPumpCmd(null);
+        } else if (pendingPumpCmd === 'P-102' && newPumpSelection === 'P-102') {
+          setPendingPumpCmd(null);
+        } else if (pendingPumpCmd === 'OFF' && newPumpSelection === 'OFF') {
+          setPendingPumpCmd(null);
+        }
+      }
+
+      // Tower is ON if fan is running OR frequency > 0 OR auto mode is active
       setTowerSelection(
-        backendData.fan.state === 'Running' || backendData.fan_auto_mode ? 'ON' : 'OFF'
+        backendData.fan.frequency > 0 || backendData.fan_auto_mode ? 'ON' : 'OFF'
       );
 
     } catch (err) {
@@ -396,7 +421,12 @@ export const App: React.FC = () => {
       console.warn('[Control] Cannot control pump while offline');
       return;
     }
+    if (pendingPumpCmd) return; // Prevent double-clicks
+
     try {
+      setPendingPumpCmd(value); // Show loading state immediately
+      setPumpSelection(value); // Optimistic UI update
+
       if (value === 'OFF') {
         await api.pump.stop();
       } else {
@@ -408,9 +438,12 @@ export const App: React.FC = () => {
         // Ensure pump is running
         await api.pump.start();
       }
-      setPumpSelection(value); // Update UI immediately
+      
+      // Keep pending state for up to 15 seconds (cleared by WebSocket update)
+      setTimeout(() => setPendingPumpCmd(null), 15000);
     } catch (err) {
       console.error('[Control] Pump selection failed:', err);
+      setPendingPumpCmd(null);
       alert(`Pump control failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
@@ -420,19 +453,30 @@ export const App: React.FC = () => {
       console.warn('[Control] Cannot control tower while offline');
       return;
     }
+    if (pendingTowerCmd) return; // Prevent double-clicks
+
     try {
+      setPendingTowerCmd(value); // Show loading state immediately
+      setTowerSelection(value); // Optimistic UI update
+
       if (value === 'ON') {
-        // In manual mode, start fan at current setpoint
-        if (vfdTower.manualMode && vfdTower.setpoint > 0) {
-          await api.fan.setFrequency(vfdTower.setpoint);
+        // In manual mode, start fan at setpoint (default 20 Hz if 0)
+        if (vfdTower.manualMode) {
+          const targetHz = vfdTower.setpoint > 0 ? vfdTower.setpoint : 20;
+          await api.fan.setFrequency(targetHz);
         }
+        // Start the VFD
+        await api.fan.start();
       } else {
-        // Turn off
-        await api.fan.setFrequency(0);
+        // Stop the VFD
+        await api.fan.stop();
       }
-      setTowerSelection(value); // Update UI immediately
+      
+      // Keep pending state for up to 15 seconds (cleared by WebSocket update)
+      setTimeout(() => setPendingTowerCmd(null), 15000);
     } catch (err) {
       console.error('[Control] Tower selection failed:', err);
+      setPendingTowerCmd(null);
       alert(`Tower control failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
@@ -461,6 +505,16 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error('[Control] Fan frequency set failed:', err);
       alert(`Fan frequency set failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handlePumpSetHz = async (hz: number) => {
+    if (!isConnected || pumpSelection === 'OFF') return;
+    try {
+      await api.pump.setFrequency(hz);
+    } catch (err) {
+      console.error('[Control] Pump frequency set failed:', err);
+      alert(`Pump frequency set failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -969,6 +1023,15 @@ export const App: React.FC = () => {
                                 value={towerSelection} 
                                 onChange={handleTowerSelection} 
                             />
+                            {pendingTowerCmd && (
+                                <g>
+                                    <rect x={towerX - 5} y={415} width="80" height="16" fill="#1e293b" rx="3" opacity="0.9" />
+                                    <text x={towerX + 35} y={427} fill="#fbbf24" fontSize="11" fontWeight="bold" textAnchor="middle">⏳ Waiting...</text>
+                                </g>
+                            )}
+                            <foreignObject x={towerX - 39} y={445} width="100" height="30">
+                                <input type="number" min="0" max="60" step="0.1" value={towerSelection === 'OFF' ? '0.0' : vfdTower.frequency.toFixed(1)} onChange={(e) => { const val = parseFloat(e.target.value); if (!isNaN(val) && val >= 0 && val <= 60) handleFanSetHz(val); }} disabled={!isConnected || towerSelection === 'OFF'} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-center text-sm font-mono font-bold text-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50" />
+                            </foreignObject>
                             
                             {/* NEW FAN CONTROLLER - Appears to the right of the selector when ON */}
                             <FanController 
@@ -1004,6 +1067,9 @@ export const App: React.FC = () => {
                                 onChange={handlePumpSelection} 
                                 title="MANUAL SELECT"
                             />
+                            <foreignObject x={pumpX + 10} y={445} width="100" height="30">
+                                <input type="number" min="0" max="60" step="0.1" value={pumpSelection === 'OFF' ? '0.0' : activePump.frequency.toFixed(1)} onChange={(e) => { const val = parseFloat(e.target.value); if (!isNaN(val) && val >= 0 && val <= 60) handlePumpSetHz(val); }} disabled={!isConnected || pumpSelection === 'OFF'} className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-center text-sm font-mono font-bold text-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50" />
+                            </foreignObject>
 
                             <WSHP 
                                 x={wshpX} 
