@@ -4,11 +4,37 @@ Industrial cooling tower monitoring and control system using Raspberry Pi, GALT 
 
 ## System Overview
 
-**Current Status**: Production deployment with Flask dashboard (operational), FastAPI backend (development)
+**Current Status**: ✅ **PRODUCTION - PUBLICLY ACCESSIBLE**
+
+### Deployment Architecture
+
+**Public Access**:
+- **React Dashboard**: http://159.89.150.146 (HTTP Basic Auth)
+- **Flask Dashboard**: http://159.89.150.146:8001 (Flask login)
+- **Username**: admin
+- **Password**: cooling2025
+
+**Infrastructure**:
+- **Digital Ocean Droplet**: 159.89.150.146 (1GB RAM, Ubuntu 24.04)
+  - Runs Caddy reverse proxy
+  - Serves React frontend (static files)
+  - Proxies API/WebSocket to Raspberry Pi
+  - HTTP Basic Auth protection
+- **Raspberry Pi**: 100.89.57.3 (Tailscale private network)
+  - Runs FastAPI backend (port 8000)
+  - Runs Flask dashboard (port 8001)
+  - VFD control and sensor monitoring
+  - Only accessible via Tailscale
+
+**Network Flow**:
+```
+Internet → DO Droplet (Caddy) → Tailscale VPN → Raspberry Pi (Backend)
+         159.89.150.146                          100.89.57.3
+```
 
 ### Hardware Configuration
 
-- **Raspberry Pi**: 100.89.57.3 (user: `max`)
+- **Raspberry Pi**: 100.89.57.3 (Tailscale), user: `max`
 - **VFDs**: 3x GALT G540 (Modbus RTU @ 9600 baud)
   - ID 1: Tower Fan (CT-101)
   - ID 2: Primary Pump (P-101)
@@ -16,69 +42,88 @@ Industrial cooling tower monitoring and control system using Raspberry Pi, GALT 
 - **Serial Interface**: USB to RS-485 converter @ /dev/ttyUSB0
 - **Sensors**:
   - ADS1115 ADC @ I2C address 0x48
-  - Channel 0: Pressure sensor (0-100 psi, 0-5V) - *not yet wired*
-  - Channel 1: Temperature sensor (placeholder calibration)
+  - Channel 0: Pressure sensor (0-100 psi, 0-5V)
+  - Channel 1: Temperature sensor
+  - Channel 2: A2 sensor (unknown type - see A2_SENSOR_TECHNICAL_REPORT.md)
 
 ### Software Stack
 
-#### Backend (Python 3.13)
-- **FastAPI**: Modern async web framework with WebSocket support
-- **Location**: `/home/max/cooling-tower/backend/`
-- **Port**: 8000 (when running)
+#### Backend API (FastAPI - Port 8000) - READ-ONLY MODE
+- **Status**: ✅ PRODUCTION
+- **Location**: `/home/max/cooling-tower/backend/main_proxy.py`
 - **Features**:
-  - Modbus RTU communication with G540 VFDs
+  - Proxies data from Flask dashboard (eliminates RS-485 conflicts)
   - ADS1115 sensor reading via I2C
   - Weather data integration (OpenWeatherMap)
   - WebSocket streaming @ 500ms intervals
-  - REST API for control operations
+  - REST API (read-only)
+- **Note**: Uses `serial_lock.py` to prevent Modbus bus conflicts
 
-#### Legacy Dashboard (Flask)
-- **Location**: `/home/max/old_dashboard/`
-- **Port**: 8001 (currently active)
-- **Status**: Production backup system
+#### Flask Dashboard (Port 8001)
+- **Status**: ✅ PRODUCTION - VFD control interface
+- **Location**: `/home/max/old_dashboard/web_dashboard.py`
+- **Type**: Full control dashboard with authentication
+- **Access**: http://159.89.150.146:8001 (admin/cooling2025)
 
-#### Frontend (React + TypeScript)
-- **Framework**: Vite 6.4.1 + React
-- **Location**: `/home/max/cooling-tower/frontend/`
+#### React Frontend (Served from DO Droplet)
+- **Status**: ✅ PRODUCTION
+- **Framework**: Vite 6.4.1 + React + TypeScript
+- **Location**: Digital Ocean `/var/www/cooling-tower/`
 - **Features**:
   - Real-time SCADA visualization
   - SVG-based P&ID graphics
   - WebSocket live data streaming
   - Thermal profile charts
-  - VFD control panels
+  - Read-only monitoring
 
-#### Web Server
-- **Caddy**: Reverse proxy on port 80
-- **Config**: `/etc/caddy/Caddyfile`
+#### Web Server (Digital Ocean Droplet)
+- **Caddy**: Reverse proxy (publicly accessible)
+- **Config**: `/etc/caddy/Caddyfile` (on DO droplet)
 - **Routes**:
-  - `/` → Frontend static files
-  - `/ws` → WebSocket proxy to backend
-  - `/api/*` → REST API proxy to backend
+  - `/` → React frontend (static files)
+  - `/ws` → WebSocket proxy to Pi
+  - `/api/*` → REST API proxy to Pi
+  - Port 8001 → Flask dashboard proxy to Pi
+- **Security**: HTTP Basic Auth (admin/cooling2025)
 
 ## Quick Start
 
 ### SSH Access
 ```bash
+# Raspberry Pi (via Tailscale)
 ssh max@100.89.57.3
 # Password: max123
-```
 
-### Start Backend (FastAPI)
-```bash
-cd /home/max/cooling-tower/backend
-source venv/bin/activate
-nohup python3 main.py > server.log 2>&1 &
+# Digital Ocean Droplet
+ssh phytocontrol  # (requires SSH config entry)
+# or: ssh root@159.89.150.146
 ```
 
 ### Access Dashboards
-- **Flask Dashboard**: http://100.89.57.3:8001
-- **New SCADA UI**: http://100.89.57.3 (requires backend running)
+- **React SCADA UI**: http://159.89.150.146 (admin/cooling2025)
+- **Flask Control Dashboard**: http://159.89.150.146:8001 (admin/cooling2025)
+
+### Start Backend on Pi (if needed)
+```bash
+ssh max@100.89.57.3
+cd /home/max/cooling-tower/backend
+
+# Start FastAPI backend (read-only proxy mode)
+source venv/bin/activate
+nohup python3 -m uvicorn main_proxy:app --host 0.0.0.0 --port 8000 > proxy.log 2>&1 &
+
+# Start Flask dashboard (if not running)
+cd /home/max/old_dashboard
+nohup python3 web_dashboard.py > dashboard.log 2>&1 &
+```
 
 ### Stop Backend
 ```bash
-# Find process
-ps aux | grep "python3 main.py"
-# Kill it
+# Find processes
+pgrep -f uvicorn
+pgrep -f web_dashboard
+
+# Kill them
 kill <PID>
 ```
 
@@ -116,15 +161,68 @@ insider workspace/
 
 ## Deployment
 
-### Building Frontend
+### Initial Setup (Digital Ocean Droplet)
+
+**1. Create Droplet**
+- Size: 1GB RAM ($4-6/month)
+- OS: Ubuntu 24.04 LTS
+- Region: Any (closest to you)
+
+**2. Install Tailscale**
+```bash
+ssh root@159.89.150.146
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up
+# Authorize in Tailscale admin console
+```
+
+**3. Install Caddy**
+```bash
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install -y caddy
+```
+
+**4. Deploy Caddyfile**
+```bash
+# Copy the Caddyfile from this repo
+sudo nano /etc/caddy/Caddyfile
+# Paste the configuration (see deployment/Caddyfile)
+sudo systemctl restart caddy
+```
+
+### Updating Frontend (React UI)
+
 ```bash
 # On local machine
 cd frontend
 npm run build
-rsync -avz --delete dist/ max@100.89.57.3:/home/max/cooling-tower/frontend/dist/
+
+# Deploy to Digital Ocean droplet
+rsync -avz --delete dist/ phytocontrol:/tmp/frontend-build/
+
+# On droplet: move to web root
+ssh phytocontrol
+sudo cp -r /tmp/frontend-build/* /var/www/cooling-tower/
+sudo chown -R caddy:caddy /var/www/cooling-tower
 ```
 
-### Backend Dependencies
+### Updating Backend on Pi
+
+```bash
+# Pull latest changes
+ssh max@100.89.57.3
+cd /home/max/cooling-tower
+git pull
+
+# Restart backend
+pkill -f uvicorn
+cd backend
+source venv/bin/activate
+nohup python3 -m uvicorn main_proxy:app --host 0.0.0.0 --port 8000 > proxy.log 2>&1 &
+```
+
+### Backend Dependencies (on Pi)
 ```bash
 ssh max@100.89.57.3
 cd /home/max/cooling-tower/backend
@@ -134,42 +232,71 @@ pip install -r requirements.txt
 
 Key dependencies:
 - FastAPI, uvicorn (web framework)
-- pyserial (Modbus RTU)
+- httpx (for proxying Flask API)
 - adafruit-circuitpython-ads1x15 (I2C sensors)
 - pydantic >= 2.10.0 (Python 3.13 compatibility)
 - RPi.GPIO (Raspberry Pi GPIO access)
 
 ## Network Configuration
 
-- **Pi IP**: 100.89.57.3
+### Raspberry Pi (Backend)
+- **Tailscale IP**: 100.89.57.3 (private network only)
+- **Port 8000**: FastAPI backend (uvicorn)
+- **Port 8001**: Flask dashboard
 - **SSH Port**: 22
-- **Flask Dashboard**: 8001
-- **FastAPI Backend**: 8000
-- **Caddy Web Server**: 80
-- **Frontend Dev Server**: 3000 (local only)
+
+### Digital Ocean Droplet (Reverse Proxy)
+- **Public IP**: 159.89.150.146
+- **Tailscale IP**: 100.94.101.123 (for Pi communication)
+- **Port 80**: Caddy web server (React frontend + API proxy)
+- **Port 8001**: Flask dashboard proxy
+- **SSH Port**: 22
+
+### Security
+- HTTP Basic Auth on React frontend/API (admin/cooling2025)
+- Flask dashboard has separate login (admin/cooling2025)
+- Raspberry Pi only accessible via Tailscale VPN
+- Caddy stopped on Pi (no longer needed)
 
 ## Development Workflow
 
 ### Local Development
 ```bash
-# Terminal 1: Run backend on Pi
+# Terminal 1: Ensure backend is running on Pi
 ssh max@100.89.57.3
-cd /home/max/cooling-tower/backend
-source venv/bin/activate
-python3 main.py
+pgrep -f uvicorn  # Check if running
 
 # Terminal 2: Run frontend locally
 cd frontend
-VITE_WS_URL=ws://100.89.57.3/ws VITE_API_URL=http://100.89.57.3 npm run dev
-# Access at http://localhost:3000
+VITE_WS_URL=ws://159.89.150.146/ws VITE_API_URL=http://159.89.150.146 npm run dev
+# Access at http://localhost:5173
 ```
 
 ### Production Deployment
-1. Test changes locally
-2. Build frontend: `npm run build`
-3. Deploy: `rsync -avz --delete dist/ max@100.89.57.3:/home/max/cooling-tower/frontend/dist/`
-4. Restart backend if needed
-5. Access at http://100.89.57.3
+1. **Test changes locally**
+2. **Update frontend .env.production** (if needed)
+   ```bash
+   # frontend/.env.production
+   VITE_WS_URL=ws://159.89.150.146/ws
+   VITE_API_URL=http://159.89.150.146
+   ```
+3. **Build and deploy frontend**:
+   ```bash
+   cd frontend
+   npm run build
+   rsync -avz --delete dist/ phytocontrol:/tmp/frontend-build/
+   ssh phytocontrol "sudo cp -r /tmp/frontend-build/* /var/www/cooling-tower/"
+   ```
+4. **Update backend** (if needed):
+   ```bash
+   ssh max@100.89.57.3
+   cd /home/max/cooling-tower
+   git pull
+   pkill -f uvicorn
+   cd backend && source venv/bin/activate
+   nohup python3 -m uvicorn main_proxy:app --host 0.0.0.0 --port 8000 > proxy.log 2>&1 &
+   ```
+5. **Test**: http://159.89.150.146
 
 ## VFD Communication
 
@@ -221,15 +348,28 @@ See [docs/G540_TECHNICAL_SUMMARY.md](docs/G540_TECHNICAL_SUMMARY.md) for complet
 ## Support & Maintenance
 
 ### Logs
-- Backend: `/home/max/cooling-tower/backend/server.log`
-- Caddy: `/var/log/caddy/access.log`
-- System: `journalctl -u caddy`
+- **Pi Backend**: `/home/max/cooling-tower/backend/proxy.log`
+- **Pi Flask**: `/home/max/old_dashboard/dashboard.log`
+- **DO Caddy**: `/var/log/caddy/access.log`
+- **DO Caddy (Flask)**: `/var/log/caddy/flask.log`
+- **System**: `journalctl -u caddy` (on DO droplet)
 
 ### Troubleshooting
-1. **Backend not responding**: Check if process is running (`ps aux | grep main.py`)
-2. **VFD communication errors**: Verify USB RS-485 adapter (`ls /dev/ttyUSB*`)
-3. **Sensor reading errors**: Check I2C devices (`i2cdetect -y 1`)
-4. **Frontend not loading**: Verify Caddy is running (`systemctl status caddy`)
+1. **Site not accessible**: 
+   - Check if Caddy is running on DO: `ssh phytocontrol "systemctl status caddy"`
+   - Check Tailscale connection: `ssh phytocontrol "tailscale status"`
+2. **Backend not responding**: 
+   - Check Pi backend: `ssh max@100.89.57.3 "pgrep -af uvicorn"`
+   - Check logs: `ssh max@100.89.57.3 "tail -f /home/max/cooling-tower/backend/proxy.log"`
+3. **VFD communication errors**: 
+   - SSH to Pi: `ssh max@100.89.57.3`
+   - Check Flask dashboard (has direct VFD access)
+   - Verify USB adapter: `ls /dev/ttyUSB*`
+4. **Sensor reading errors**: 
+   - Check I2C: `i2cdetect -y 1`
+5. **Authentication not working**:
+   - Verify basic auth hash in Caddyfile
+   - Test: `curl -u admin:cooling2025 http://159.89.150.146/api/health`
 
 ### VFD Reset
 If VFD is in fault state:
