@@ -6,12 +6,24 @@ set -e  # Exit on error
 # Configuration
 PI_USER="max"
 PI_HOST="100.89.57.3"
-PI_BACKEND_DIR="/home/max/cooling-tower/backend"
-PI_FRONTEND_DIR="/home/max/cooling-tower/frontend"
+BACKEND_SOURCE_DIR="/home/max"  # Where Flask imports from
+OLD_DASHBOARD_DIR="/home/max/old_dashboard"
+
+# Digital Ocean droplet for React frontend
+DO_HOST="159.89.150.146"
+DO_USER="root"
+DO_FRONTEND_DIR="/var/www/cooling-tower"
 
 echo "========================================="
 echo "Deploying Cooling Tower SCADA System"
 echo "========================================="
+
+# Check for uncommitted changes
+if ! git diff-index --quiet HEAD --; then
+    echo "⚠️  WARNING: You have uncommitted changes"
+    git status --short
+    echo ""
+fi
 
 # Check if Pi is reachable
 echo "Checking Pi connectivity..."
@@ -23,42 +35,54 @@ fi
 
 echo "✓ Pi is reachable"
 
-# Create directories on Pi
-echo "Creating directories on Pi..."
-ssh "$PI_USER@$PI_HOST" "mkdir -p $PI_BACKEND_DIR $PI_FRONTEND_DIR"
+# Deploy core modules to /home/max (Flask imports from here)
+echo "Deploying core modules to $BACKEND_SOURCE_DIR..."
+ssh "$PI_USER@$PI_HOST" "mkdir -p $BACKEND_SOURCE_DIR"
+scp backend/{vfd_controller,sensor_manager,pump_failover,config,serial_lock}.py \
+    "$PI_USER@$PI_HOST:$BACKEND_SOURCE_DIR/"
 
-# Deploy backend
-echo "Deploying backend..."
-rsync -avz --exclude='__pycache__' --exclude='*.pyc' --exclude='.git' \
-    backend/ "$PI_USER@$PI_HOST:$PI_BACKEND_DIR/"
+# Deploy Flask dashboard
+echo "Deploying Flask dashboard..."
+ssh "$PI_USER@$PI_HOST" "mkdir -p $OLD_DASHBOARD_DIR/templates"
+scp old_dashboard/web_dashboard.py "$PI_USER@$PI_HOST:$OLD_DASHBOARD_DIR/"
+scp old_dashboard/templates/dashboard.html "$PI_USER@$PI_HOST:$OLD_DASHBOARD_DIR/templates/"
 
-# Copy core modules (they're imported from parent dir)
-echo "Deploying core modules..."
-scp config.py vfd_controller.py sensor_manager.py pump_failover.py main_control.py \
-    "$PI_USER@$PI_HOST:$PI_BACKEND_DIR/" 2>/dev/null || echo "Modules already in backend/"
+# Deploy login template if it exists
+if [ -f "old_dashboard/templates/login.html" ]; then
+    scp old_dashboard/templates/login.html "$PI_USER@$PI_HOST:$OLD_DASHBOARD_DIR/templates/"
+fi
 
-# Deploy frontend build
-echo "Deploying frontend..."
-rsync -avz --delete frontend/dist/ "$PI_USER@$PI_HOST:$PI_FRONTEND_DIR/dist/"
+# Restart Flask (if running)
+echo "Restarting Flask dashboard..."
+ssh "$PI_USER@$PI_HOST" "pkill -f web_dashboard || true; cd $OLD_DASHBOARD_DIR && nohup python3 web_dashboard.py > /tmp/flask.log 2>&1 &"
 
-# Install backend dependencies
-echo "Setting up Python virtual environment and installing dependencies..."
-ssh "$PI_USER@$PI_HOST" "cd $PI_BACKEND_DIR && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+# Restart FastAPI (if running)
+echo "Restarting FastAPI proxy..."
+ssh "$PI_USER@$PI_HOST" "pkill -f 'uvicorn.*main_proxy' || true; cd /home/max/cooling-tower/backend && nohup python3 -m uvicorn main_proxy:app --host 0.0.0.0 --port 8000 > /tmp/fastapi.log 2>&1 &"
 
-# Make install script executable
-ssh "$PI_USER@$PI_HOST" "chmod +x $PI_BACKEND_DIR/install.sh"
+# Deploy React frontend to Digital Ocean droplet
+echo ""
+echo "Building and deploying React frontend to DO droplet..."
+cd frontend
+npm run build
+rsync -avz --delete dist/ "$DO_USER@$DO_HOST:$DO_FRONTEND_DIR/"
+ssh "$DO_USER@$DO_HOST" "chown -R caddy:caddy $DO_FRONTEND_DIR"
+cd ..
 
 echo ""
 echo "========================================="
 echo "Deployment Complete!"
 echo "========================================="
 echo ""
-echo "Next steps:"
-echo "1. SSH to Pi: ssh $PI_USER@$PI_HOST"
-echo "2. Run backend installer: cd $PI_BACKEND_DIR && sudo ./install.sh"
-echo "3. Start backend: sudo systemctl start cooling-tower"
-echo "4. Check status: sudo systemctl status cooling-tower"
-echo "5. View logs: sudo journalctl -u cooling-tower -f"
+echo "Services running on Pi:"
+echo "  Flask:   http://100.89.57.3:8001"
+echo "  FastAPI: http://100.89.57.3:8000"
 echo ""
-echo "Access UI at: http://$PI_HOST/"
+echo "Public access:"
+echo "  React UI:    http://159.89.150.146"
+echo "  Flask UI:    http://159.89.150.146:8001"
+echo ""
+echo "Check logs:"
+echo "  Flask:   ssh $PI_USER@$PI_HOST 'tail -f /tmp/flask.log'"
+echo "  FastAPI: ssh $PI_USER@$PI_HOST 'tail -f /tmp/fastapi.log'"
 echo ""
