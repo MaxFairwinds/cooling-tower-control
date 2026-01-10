@@ -10,7 +10,8 @@ export const PumpSelector: React.FC<{
     value: PumpSelection; 
     onChange: (val: PumpSelection) => void;
     title?: string;
-}> = ({ x, y, value, onChange, title = "MANUAL SELECT" }) => {
+    isPending?: boolean;
+}> = ({ x, y, value, onChange, title = "MANUAL SELECT", isPending = false }) => {
     const width = 120;
     const height = 30;
     const btnW = width / 3;
@@ -21,12 +22,19 @@ export const PumpSelector: React.FC<{
 
     return (
         <g transform={`translate(${x}, ${y})`}>
-            <rect x="-40" y="-28" width="80" height="12" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1" />
-            <text x="0" y="-20" textAnchor="middle" className="text-[7px] font-mono font-bold fill-slate-400 tracking-widest">{title}</text>
+            <rect x="-60" y="-28" width="120" height="12" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1" />
+            <text x="0" y="-20" textAnchor="middle" className={isPending ? "text-[8px] font-mono font-bold fill-amber-400 tracking-widest" : "text-[7px] font-mono font-bold fill-slate-400 tracking-widest"}>{isPending ? '⏳ SYNCING...' : title}</text>
             <rect x={-width/2 - 2} y={-height/2 - 2} width={width + 4} height={height + 4} rx="4" fill="#1e293b" stroke="#0f172a" strokeWidth="2" />
             <rect x={-width/2} y={-height/2} width={width} height={height} rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1" />
             <g transform={`translate(${knobX}, 0)`} style={{ transition: 'transform 0.2s ease-out' }}>
                 <rect x={-btnW/2 + 2} y={-height/2 + 2} width={btnW - 4} height={height - 4} rx="2" fill={value === 'OFF' ? '#334155' : '#0ea5e9'} stroke={value === 'OFF' ? '#475569' : '#38bdf8'} strokeWidth="1" className={value !== 'OFF' ? 'shadow-[0_0_10px_rgba(56,189,248,0.5)]' : ''} />
+                {isPending && (
+                    <>
+                        <rect x={-btnW/2 + 2} y={-height/2 + 2} width={btnW - 4} height={height - 4} rx="2" fill="#fbbf24" opacity="0.7">
+                            <animate attributeName="opacity" values="0.3;0.9;0.3" dur="1s" repeatCount="indefinite" />
+                        </rect>
+                    </>
+                )}
             </g>
             <g style={{ cursor: 'pointer' }} onClick={() => onChange('P-101')}>
                 <rect x={-width/2} y={-height/2} width={btnW} height={height} fill="transparent" />
@@ -53,7 +61,8 @@ export const TowerSelector: React.FC<{
     value: TowerSelection; 
     onChange: (val: TowerSelection) => void;
     title?: string;
-}> = ({ x, y, value, onChange, title = "TOWER SELECT" }) => {
+    isPending?: boolean;
+}> = ({ x, y, value, onChange, title = "TOWER SELECT", isPending = false }) => {
     const width = 120;
     const height = 30;
     const btnW = width / 2;
@@ -62,13 +71,18 @@ export const TowerSelector: React.FC<{
 
     return (
         <g transform={`translate(${x}, ${y})`}>
-            <rect x="-40" y="-28" width="80" height="12" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1" />
-            <text x="0" y="-20" textAnchor="middle" className="text-[7px] font-mono font-bold fill-slate-400 tracking-widest">{title}</text>
+            <rect x="-60" y="-28" width="120" height="12" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1" />
+            <text x="0" y="-20" textAnchor="middle" className={isPending ? "text-[8px] font-mono font-bold fill-amber-400 tracking-widest" : "text-[7px] font-mono font-bold fill-slate-400 tracking-widest"}>{isPending ? '⏳ SYNCING...' : title}</text>
             <rect x={-width/2 - 2} y={-height/2 - 2} width={width + 4} height={height + 4} rx="4" fill="#1e293b" stroke="#0f172a" strokeWidth="2" />
             <rect x={-width/2} y={-height/2} width={width} height={height} rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1" />
             <g transform={`translate(${knobX}, 0)`} style={{ transition: 'transform 0.2s ease-out' }}>
-                <rect x={-btnW/2 + 2} y={-height/2 + 2} width={btnW - 4} height={height - 4} rx="2" fill={value === 'OFF' ? '#334155' : '#0ea5e9'} stroke={value === 'OFF' ? '#475569' : '#38bdf8'} strokeWidth="1" className={value !== 'OFF' ? 'shadow-[0_0_10px_rgba(56,189,248,0.5)]' : ''} />
-            </g>
+                <rect x={-btnW/2 + 2} y={-height/2 + 2} width={btnW - 4} height={height - 4} rx="2" fill={value === 'OFF' ? '#334155' : '#0ea5e9'} stroke={value === 'OFF' ? '#475569' : '#38bdf8'} strokeWidth="1" className={value !== 'OFF' ? 'shadow-[0_0_10px_rgba(56,189,248,0.5)]' : ''} />                {isPending && (
+                    <>
+                        <rect x={-btnW/2 + 2} y={-height/2 + 2} width={btnW - 4} height={height - 4} rx="2" fill="#fbbf24" opacity="0.7">
+                            <animate attributeName="opacity" values="0.3;0.9;0.3" dur="1s" repeatCount="indefinite" />
+                        </rect>
+                    </>
+                )}            </g>
             <g style={{ cursor: 'pointer' }} onClick={() => onChange('ON')}>
                 <rect x={-width/2} y={-height/2} width={btnW} height={height} fill="transparent" />
                 <text x={-width/2 + btnW/2} y={4} textAnchor="middle" className="text-[9px] font-bold select-none pointer-events-none" fill={value === 'ON' ? '#fff' : '#475569'}>ON</text>

@@ -210,8 +210,8 @@ class MultiVFDManager:
         """
         parity_map = {'E': serial.PARITY_EVEN, 'O': serial.PARITY_ODD, 'N': serial.PARITY_NONE}
         
-        self.ser = serial.Serial(
-            port=port,
+        self.ser = serial.serial_for_url(
+            port,
             baudrate=baudrate,
             bytesize=bytesize,
             parity=parity_map.get(parity, serial.PARITY_EVEN),

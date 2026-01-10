@@ -2,22 +2,24 @@
 # Install with: pip install -r requirements.txt
 
 # Core framework
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
 
-# Data validation
-pydantic==2.5.3
+# Data validation (must be >=2.10.0 for Python 3.13 compatibility)
+pydantic>=2.10.0
 
 # Async support
 aiofiles==23.2.1
 
 # HTTP client
 requests==2.31.0
+httpx>=0.27.0
 
 # Hardware (reuse existing requirements)
 pyserial==3.5
 adafruit-circuitpython-ads1x15==2.2.21
+RPi.GPIO>=0.7.0
 
 # Logging
 python-json-logger==2.0.7

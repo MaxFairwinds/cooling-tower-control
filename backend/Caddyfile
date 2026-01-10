@@ -35,7 +35,7 @@
         path /ws
     }
     handle @websocket {
-        reverse_proxy localhost:8000
+        reverse_proxy 127.0.0.1:8000
     }
     
     # API endpoints
@@ -43,15 +43,7 @@
         path /api/*
     }
     handle @api {
-        reverse_proxy localhost:8000 {
-            # Increase timeout for Modbus operations
-            timeout 30s
-            
-            # Health check
-            health_uri /api/health
-            health_interval 30s
-            health_timeout 10s
-        }
+        reverse_proxy 127.0.0.1:8000
     }
     
     # Legacy Flask backup dashboard
@@ -65,7 +57,7 @@
     # React production build (main UI)
     handle {
         # Serve from dist folder
-        root * /home/pi/cooling-tower-ui/dist
+        root * /home/max/cooling-tower/frontend/dist
         
         # Try files, fallback to index.html for SPA routing
         try_files {path} /index.html

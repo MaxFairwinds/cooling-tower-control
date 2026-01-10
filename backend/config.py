@@ -22,7 +22,7 @@ VFD_CONFIG = {
 }
 
 # Serial Port Configuration (GALT G540 Actual Settings)
-SERIAL_PORT = '/dev/ttyUSB0'  # USB-RS485 adapter
+SERIAL_PORT = 'rfc2217://localhost:2485'  # USB-RS485 adapter via ser2net
 SERIAL_BAUDRATE = 9600         # Found via scanner (P14.01=3)
 SERIAL_PARITY = 'N'            # No parity (P14.02=0)
 SERIAL_STOPBITS = 1

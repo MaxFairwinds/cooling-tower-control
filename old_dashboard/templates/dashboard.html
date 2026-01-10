@@ -339,7 +339,7 @@
                 // Sensors
                 document.getElementById('pressure').textContent = data.sensors.pressure_psi.toFixed(2) + ' psi';
                 document.getElementById('temperature').textContent = data.sensors.temperature_f.toFixed(1) + ' °F';
-                document.getElementById('airTemperature').textContent = data.sensors.air_temperature_f.toFixed(1) + ' °F';
+document.getElementById('airTemperature').textContent = data.sensors.a2_voltage.toFixed(3) + ' V';
                 
                 // Fan VFD
                 updateVFDDisplay('fan', data.fan);

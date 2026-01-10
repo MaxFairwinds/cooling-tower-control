@@ -10,8 +10,7 @@ BACKEND_SOURCE_DIR="/home/max"  # Where Flask imports from
 OLD_DASHBOARD_DIR="/home/max/old_dashboard"
 
 # Digital Ocean droplet for React frontend
-DO_HOST="159.89.150.146"
-DO_USER="root"
+DO_HOST="phytocontrol"  # SSH alias for 159.89.150.146
 DO_FRONTEND_DIR="/var/www/cooling-tower"
 
 echo "========================================="
@@ -54,19 +53,23 @@ fi
 
 # Restart Flask (if running)
 echo "Restarting Flask dashboard..."
-ssh "$PI_USER@$PI_HOST" "pkill -f web_dashboard || true; cd $OLD_DASHBOARD_DIR && nohup python3 web_dashboard.py > /tmp/flask.log 2>&1 &"
+ssh "$PI_USER@$PI_HOST" "pkill -f web_dashboard || true; sleep 2; cd $OLD_DASHBOARD_DIR && nohup python3 web_dashboard.py > /tmp/flask.log 2>&1 &"
+echo "Waiting for Flask to start..."
+sleep 3
 
 # Restart FastAPI (if running)
 echo "Restarting FastAPI proxy..."
-ssh "$PI_USER@$PI_HOST" "pkill -f 'uvicorn.*main_proxy' || true; cd /home/max/cooling-tower/backend && nohup python3 -m uvicorn main_proxy:app --host 0.0.0.0 --port 8000 > /tmp/fastapi.log 2>&1 &"
+ssh "$PI_USER@$PI_HOST" "pkill -f 'uvicorn.*main_proxy' || true; sleep 2; cd /home/max/cooling-tower/backend && nohup python3 -m uvicorn main_proxy:app --host 0.0.0.0 --port 8000 > /tmp/fastapi.log 2>&1 &"
+echo "Waiting for FastAPI to start..."
+sleep 2
 
 # Deploy React frontend to Digital Ocean droplet
 echo ""
 echo "Building and deploying React frontend to DO droplet..."
 cd frontend
 npm run build
-rsync -avz --delete dist/ "$DO_USER@$DO_HOST:$DO_FRONTEND_DIR/"
-ssh "$DO_USER@$DO_HOST" "chown -R caddy:caddy $DO_FRONTEND_DIR"
+rsync -avz --delete dist/ "$DO_HOST:$DO_FRONTEND_DIR/"
+ssh "$DO_HOST" "chown -R caddy:caddy $DO_FRONTEND_DIR"
 cd ..
 
 echo ""

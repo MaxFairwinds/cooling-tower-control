@@ -15,8 +15,11 @@
 ## System Architecture (Quick Reference)
 
 - **Digital Ocean Droplet** (159.89.150.146): Caddy reverse proxy
+  - SSH: `ssh phytocontrol` (SSH config alias)
 - **Raspberry Pi** (100.89.57.3): Flask (8001) + FastAPI (8000)
+  - SSH: `ssh max@100.89.57.3`
 - **Flask**: `/home/max/old_dashboard/` - imports from `/home/max/`
+- **FastAPI**: `/home/max/cooling-tower/backend/` - proxies Flask
 - **VFD Control**: Flask has direct hardware access, FastAPI proxies Flask
 
 ## Deployment
@@ -67,3 +70,4 @@ scp /tmp/file_latest.py max@100.89.57.3:/target/path/
 - Create files when told not to
 - Continue when instructed to stop
 - Make changes without understanding dependencies
+- Chain commands with `&&` or `;` - always run single commands separately

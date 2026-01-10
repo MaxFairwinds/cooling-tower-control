@@ -60,36 +60,12 @@ class SensorManager:
         psi = (voltage / 5.0) * 100.0
         return max(0.0, min(100.0, psi))
 
-    def read_air_temperature(self):
+    def read_a2_voltage(self):
         """
-        Read ambient air temperature from Channel 2 (A2).
-        Uses RTD sensor (~87Ω) with 100Ω voltage divider from 3.3V
+        Read raw voltage from Channel 2 (A2).
+        Returns voltage in volts for monitoring purposes.
         """
-        voltage = self.read_voltage(2)
-        
-        # Avoid division by zero
-        if voltage >= self.V_SUPPLY or voltage < 0.1:
-            return self.CAL_RTD_TEMP_F
-        
-        # Calculate RTD resistance from voltage divider
-        # V = V_supply * (R_rtd / (R_rtd + R_bias))
-        # R_rtd = (V * R_bias) / (V_supply - V)
-        r_rtd = (voltage * self.R_BIAS_AIR) / (self.V_SUPPLY - voltage)
-        
-        # Simple linear approximation for now (typical RTD ~0.385Ω/°C)
-        # Using calibration point: 87Ω at 65°F
-        # This should be refined with actual temperature measurements
-        delta_r = r_rtd - self.CAL_RTD_RESISTANCE
-        delta_temp_c = delta_r / 0.385  # Ω/°C for typical RTD
-        temp_c = (self.CAL_RTD_TEMP_F - 32) * 5/9 + delta_temp_c
-        temp_f = temp_c * 9/5 + 32
-        
-        # Sanity check: air temp should be -20°F to 120°F
-        if temp_f < -20 or temp_f > 120:
-            logger.warning(f'Air temperature out of range: {temp_f:.1f}°F, using calibration value')
-            return self.CAL_RTD_TEMP_F
-        
-        return temp_f
+        return self.read_voltage(2)
     
     def read_temperature(self):
         # Reading from A0 (thermistor with 1k voltage divider)
@@ -132,5 +108,5 @@ class SensorManager:
         return {
             'pressure_psi': self.read_pressure(),
             'temperature_f': self.read_temperature(),
-            'air_temperature_f': self.read_air_temperature()
+            'a2_voltage': self.read_a2_voltage()
         }
