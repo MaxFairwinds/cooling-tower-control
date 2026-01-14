@@ -236,6 +236,7 @@ async def control_loop():
 class SensorData(BaseModel):
     pressure_psi: float
     basin_temp_f: float
+    flow_gpm: float
     timestamp: str
     status: str  # "online" | "offline"
 
@@ -288,6 +289,7 @@ def get_sensor_data() -> SensorData:
         return SensorData(
             pressure_psi=data.get('pressure_psi', 0.0),
             basin_temp_f=data.get('temperature_f', 0.0),
+            flow_gpm=data.get('flow_gpm', 0.0),
             timestamp=datetime.now().isoformat(),
             status="online"
         )
@@ -296,6 +298,7 @@ def get_sensor_data() -> SensorData:
         return SensorData(
             pressure_psi=0.0,
             basin_temp_f=0.0,
+            flow_gpm=0.0,
             timestamp=datetime.now().isoformat(),
             status="offline"
         )
@@ -359,7 +362,7 @@ async def get_full_system_status() -> SystemStatus:
     calculated = CalculatedData(
         return_temp_f=calc_data['return_temp_f'],
         heat_load_kw=calc_data['heat_load_kw'],
-        gpm=calc_data['gpm'],
+        gpm=sensors.flow_gpm,  # Use actual flow sensor reading
         approach_f=calc_data['approach_f']
     )
     

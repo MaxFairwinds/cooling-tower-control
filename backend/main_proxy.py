@@ -212,14 +212,15 @@ def transform_flask_data(flask_data: dict) -> dict:
         "sensors": {
             "pressure_psi": sensors.get('pressure_psi', 0.0),
             "basin_temp_f": sensors.get('temperature_f', 0.0),
+            "flow_gpm": sensors.get('flow_gpm', 0.0),
             "timestamp": flask_data.get('timestamp', datetime.now().isoformat()),
             "status": "online"
         },
-        "fan": {weather_data.get('temp_f', 0.0),
-            "humidity_pct": weather_data.get('humidity', 0.0),
-            "wet_bulb_f": weather_data.get('wet_bulb_f', 0.0),
-            "last_update": weather_data.get('last_update', datetime.now().isoformat()),
-            "status": weather_data.get('status', 'offline')et('fault', 0)
+        "fan": {
+            "state": map_state(fan.get('state', 'Unknown')),
+            "frequency": fan.get('frequency', 0.0),
+            "current": fan.get('current', 0.0),
+            "fault_code": fan.get('fault', 0)
         },
         "pump_primary": {
             "state": map_state(pump_primary.get('state', 'Unknown')),
@@ -244,7 +245,7 @@ def transform_flask_data(flask_data: dict) -> dict:
         "calculated": {
             "return_temp_f": sensors.get('temperature_f', 0.0) + 10.0,
             "heat_load_kw": 0.0,
-            "gpm": 0.0,
+            "gpm": sensors.get('flow_gpm', 0.0),
             "approach_f": 0.0
         },
         "fan_auto_mode": False,

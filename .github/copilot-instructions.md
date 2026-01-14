@@ -71,3 +71,4 @@ scp /tmp/file_latest.py max@100.89.57.3:/target/path/
 - Continue when instructed to stop
 - Make changes without understanding dependencies
 - Chain commands with `&&` or `;` - always run single commands separately
+- Access I2C sensors directly (via Python scripts) while Flask is running - this locks the I2C bus and crashes the system

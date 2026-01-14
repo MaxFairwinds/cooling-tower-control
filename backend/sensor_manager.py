@@ -2,8 +2,11 @@ import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
+from adafruit_extended_bus import ExtendedI2C as I2C
 import logging
 import math
+import glob
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +15,24 @@ class SensorManager:
     
     def __init__(self, i2c_address=0x48, gain=1):
         try:
-            self.i2c = busio.I2C(board.SCL, board.SDA)
-            self.ads = ADS.ADS1115(self.i2c, address=i2c_address)
+            # Auto-detect which I2C bus the ADS1115 is on
+            self.i2c = None
+            i2c_buses = sorted([int(os.path.basename(f).split('-')[1]) for f in glob.glob('/dev/i2c-*')])
+            
+            for bus_num in i2c_buses:
+                try:
+                    test_i2c = I2C(bus_num)
+                    test_ads = ADS.ADS1115(test_i2c, address=i2c_address)
+                    # Successfully connected
+                    self.i2c = test_i2c
+                    self.ads = test_ads
+                    logger.info(f'ADS1115 found on I2C bus {bus_num} at address 0x{i2c_address:02X}')
+                    break
+                except Exception as e:
+                    continue
+            
+            if self.i2c is None:
+                raise Exception(f'No I2C device at address: 0x{i2c_address:02X}')
             self.ads.gain = gain
             
             # Temperature sensor configuration (NTC thermistor with 1kΩ voltage divider)
@@ -60,12 +79,26 @@ class SensorManager:
         psi = (voltage / 5.0) * 100.0
         return max(0.0, min(100.0, psi))
 
-    def read_a2_voltage(self):
+    def read_flow_gpm(self):
         """
-        Read raw voltage from Channel 2 (A2).
-        Returns voltage in volts for monitoring purposes.
+        Read flow rate from A2 pin (Channel 2)
+        Omega flow meter: 4-20mA output, 0-1000 GPM range
+        150 ohm current sensing resistor:
+          4mA = 0.6V = 0 GPM
+          20mA = 3.0V = 1000 GPM
         """
-        return self.read_voltage(2)
+        voltage = self.read_voltage(2)
+        
+        # 4-20mA to GPM conversion
+        V_MIN = 0.6   # 4mA × 150Ω
+        V_MAX = 3.0   # 20mA × 150Ω
+        GPM_MAX = 1000.0
+        
+        if voltage < V_MIN:
+            return 0.0
+        
+        gpm = (voltage - V_MIN) / (V_MAX - V_MIN) * GPM_MAX
+        return max(0.0, min(GPM_MAX, gpm))
     
     def read_temperature(self):
         # Reading from A0 (thermistor with 1k voltage divider)
@@ -108,5 +141,5 @@ class SensorManager:
         return {
             'pressure_psi': self.read_pressure(),
             'temperature_f': self.read_temperature(),
-            'a2_voltage': self.read_a2_voltage()
+            'flow_gpm': self.read_flow_gpm()
         }
