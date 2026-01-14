@@ -70,7 +70,7 @@ class CoolingTowerSystem:
         self.auto_mode = False
         self.system_state = {
             'timestamp': None,
-            'sensors': {'pressure_psi': 0, 'temperature_f': 0, 'a2_voltage': 0},
+            'sensors': {'pressure_psi': 0, 'temperature_f': 0, 'flow_gpm': 0},
             'fan': {'state': 'Unknown', 'frequency': 0, 'current': 0, 'fault': 0},
             'pump_primary': {'state': 'Unknown', 'frequency': 0, 'current': 0, 'fault': 0},
             'pump_backup': {'state': 'Unknown', 'frequency': 0, 'current': 0, 'fault': 0},
@@ -166,7 +166,7 @@ class CoolingTowerSystem:
         """Main control loop"""
         while self.running:
             try:
-                self.update_state()
+                self.update_sensors()  # Only update sensors (fast), VFDs updated in separate thread
                 
                 if self.auto_mode:
                     # Automatic pressure control
@@ -188,7 +188,7 @@ class CoolingTowerSystem:
                     if PUMP_FAILOVER['auto_failover_enabled']:
                         self.pump_manager.check_health()
                 
-                time.sleep(1.0)
+                time.sleep(0.5)  # 2 Hz update rate
                 
             except Exception as e:
                 logger.error(f"Control loop error: {e}")
@@ -370,10 +370,10 @@ def switch_pump():
 if __name__ == '__main__':
     # Start status update thread
     def update_thread():
-        """Fast sensor updates every 2 seconds"""
+        """Fast sensor updates at 2 Hz"""
         while True:
             system.update_sensors()
-            time.sleep(2.0)
+            time.sleep(0.5)
     
     def vfd_update_thread():
         """Slow VFD status updates every 10 seconds"""

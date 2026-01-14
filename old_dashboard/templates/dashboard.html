@@ -215,8 +215,8 @@
                     <span class="metric-value" id="temperature">-- °F</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Air Temperature</span>
-                    <span class="metric-value" id="airTemperature">-- °F</span>
+                    <span class="metric-label">Flow Rate</span>
+                    <span class="metric-value" id="flowRate">-- GPM</span>
                 </div>
             </div>
             
@@ -327,8 +327,8 @@
     </div>
     
     <script>
-        // Update status every 2 seconds
-        setInterval(updateStatus, 2000);
+        // Update status at 2 Hz (500ms)
+        setInterval(updateStatus, 500);
         updateStatus();
         
         async function updateStatus() {
@@ -339,7 +339,7 @@
                 // Sensors
                 document.getElementById('pressure').textContent = data.sensors.pressure_psi.toFixed(2) + ' psi';
                 document.getElementById('temperature').textContent = data.sensors.temperature_f.toFixed(1) + ' °F';
-document.getElementById('airTemperature').textContent = data.sensors.a2_voltage.toFixed(3) + ' V';
+                document.getElementById('flowRate').textContent = data.sensors.flow_gpm.toFixed(1) + ' GPM';
                 
                 // Fan VFD
                 updateVFDDisplay('fan', data.fan);
