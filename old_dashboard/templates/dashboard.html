@@ -337,9 +337,17 @@
                 const data = await response.json();
                 
                 // Sensors
-                document.getElementById('pressure').textContent = data.sensors.pressure_psi.toFixed(2) + ' psi';
-                document.getElementById('temperature').textContent = data.sensors.temperature_f.toFixed(1) + ' °F';
-                document.getElementById('flowRate').textContent = data.sensors.flow_gpm.toFixed(1) + ' GPM';
+                const pressure = data.sensors.pressure_psi.toFixed(1);
+                const pressureStd = data.sensors.pressure_std?.toFixed(1) || '0.0';
+                document.getElementById('pressure').textContent = `${pressure} ±${pressureStd} psi`;
+                
+                const temp = data.sensors.temperature_f.toFixed(1);
+                const tempStd = data.sensors.temperature_std?.toFixed(1) || '0.0';
+                document.getElementById('temperature').textContent = `${temp} ±${tempStd} °F`;
+                
+                const flow = data.sensors.flow_gpm.toFixed(1);
+                const flowStd = data.sensors.flow_std?.toFixed(1) || '0.0';
+                document.getElementById('flowRate').textContent = `${flow} ±${flowStd} GPM`;
                 
                 // Fan VFD
                 updateVFDDisplay('fan', data.fan);

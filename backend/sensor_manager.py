@@ -7,6 +7,8 @@ import logging
 import math
 import glob
 import os
+from collections import deque
+import statistics
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,11 @@ class SensorManager:
             self.CAL_RTD_RESISTANCE = 87.0
             self.CAL_RTD_TEMP_F = 70.0  # Estimated - measure actual temp to calibrate
             
+            # Rolling buffers for 5-second moving average (10 samples at 2 Hz)
+            self.pressure_buffer = deque(maxlen=10)
+            self.temp_buffer = deque(maxlen=10)
+            self.flow_buffer = deque(maxlen=10)
+            
             logger.info(f'ADS1115 initialized at address 0x{i2c_address:02X}, gain={gain}')
             
         except Exception as e:
@@ -68,6 +75,14 @@ class SensorManager:
         except Exception as e:
             logger.error(f'Failed to read channel {channel}: {e}')
             return 0.0
+    
+    def _calc_stats(self, buffer):
+        """Calculate average and standard deviation from buffer"""
+        if len(buffer) == 0:
+            return 0.0, 0.0
+        avg = statistics.mean(buffer)
+        stddev = statistics.stdev(buffer) if len(buffer) > 1 else 0.0
+        return avg, stddev
 
     def read_pressure(self):
         # TEMP: Pressure sensor not connected yet
@@ -77,7 +92,12 @@ class SensorManager:
         """
         voltage = self.read_voltage(1)
         psi = (voltage / 5.0) * 100.0
-        return max(0.0, min(100.0, psi))
+        psi = max(0.0, min(100.0, psi))
+        
+        # Add to rolling buffer
+        self.pressure_buffer.append(psi)
+        
+        return psi
 
     def read_flow_gpm(self):
         """
@@ -95,10 +115,15 @@ class SensorManager:
         GPM_MAX = 1000.0
         
         if voltage < V_MIN:
-            return 0.0
+            gpm = 0.0
+        else:
+            gpm = (voltage - V_MIN) / (V_MAX - V_MIN) * GPM_MAX
+            gpm = max(0.0, min(GPM_MAX, gpm))
         
-        gpm = (voltage - V_MIN) / (V_MAX - V_MIN) * GPM_MAX
-        return max(0.0, min(GPM_MAX, gpm))
+        # Add to rolling buffer
+        self.flow_buffer.append(gpm)
+        
+        return gpm
     
     def read_temperature(self):
         # Reading from A0 (thermistor with 1k voltage divider)
@@ -129,17 +154,38 @@ class SensorManager:
             # Sanity check: water temp should be 0-100°C
             if temp_c < -10 or temp_c > 110:
                 logger.warning(f'Temperature out of range: {temp_c:.1f}°C, using calibration value')
-                return self.CAL_TEMP_C * 9/5 + 32  # 65°F
-                
-            return temp_c * 9/5 + 32  # Convert to Fahrenheit
+                temp_f = self.CAL_TEMP_C * 9/5 + 32  # 65°F
+            else:
+                temp_f = temp_c * 9/5 + 32  # Convert to Fahrenheit
             
+            # Add to rolling buffer
+            self.temp_buffer.append(temp_f)
+            
+            return temp_f
+                
         except Exception as e:
             logger.error(f'Temperature calculation error: {e}, R={r_thermistor:.0f}Ω, V={voltage:.3f}V')
-            return self.CAL_TEMP_C * 9/5 + 32  # 65°F
+            temp_f = self.CAL_TEMP_C * 9/5 + 32  # 65°F
+            self.temp_buffer.append(temp_f)
+            return temp_f
     
     def read_all(self):
+        """Read all sensors and return current values plus statistics"""
+        # Read raw values (also populates buffers)
+        current_pressure = self.read_pressure()
+        current_temp = self.read_temperature()
+        current_flow = self.read_flow_gpm()
+        
+        # Calculate statistics from buffers
+        pressure_avg, pressure_std = self._calc_stats(self.pressure_buffer)
+        temp_avg, temp_std = self._calc_stats(self.temp_buffer)
+        flow_avg, flow_std = self._calc_stats(self.flow_buffer)
+        
         return {
-            'pressure_psi': self.read_pressure(),
-            'temperature_f': self.read_temperature(),
-            'flow_gpm': self.read_flow_gpm()
+            'pressure_psi': pressure_avg,
+            'pressure_std': pressure_std,
+            'temperature_f': temp_avg,
+            'temperature_std': temp_std,
+            'flow_gpm': flow_avg,
+            'flow_std': flow_std
         }

@@ -808,7 +808,9 @@ export const App: React.FC = () => {
                 {/* FLOW RATE (GPM) */}
                 <div className="flex flex-col items-center">
                     <span className="text-[10px] text-slate-400 font-bold">FLOW RATE</span>
-                    <span className="text-xs font-mono font-bold text-cyan-400">{currentGPM.toFixed(0)} GPM</span>
+                    <span className="text-xs font-mono font-bold text-cyan-400">
+                        {currentGPM.toFixed(0)} ±{(backendData?.sensors.flow_std || 0).toFixed(1)} GPM
+                    </span>
                 </div>
 
                 {/* WEATHER DATA (Read-only from API) */}

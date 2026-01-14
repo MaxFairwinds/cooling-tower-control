@@ -211,8 +211,11 @@ def transform_flask_data(flask_data: dict) -> dict:
     return {
         "sensors": {
             "pressure_psi": sensors.get('pressure_psi', 0.0),
+            "pressure_std": sensors.get('pressure_std', 0.0),
             "basin_temp_f": sensors.get('temperature_f', 0.0),
+            "temperature_std": sensors.get('temperature_std', 0.0),
             "flow_gpm": sensors.get('flow_gpm', 0.0),
+            "flow_std": sensors.get('flow_std', 0.0),
             "timestamp": flask_data.get('timestamp', datetime.now().isoformat()),
             "status": "online"
         },
