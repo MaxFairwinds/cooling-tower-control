@@ -624,8 +624,8 @@ export const App: React.FC = () => {
   const activePump = system.activePump === 'PRIMARY' ? vfdPrimary : vfdBackup;
   const flowFactor = activePump.status === 'Running' ? (activePump.frequency / 60) : 0;
   
-  // Use calculated delta-T from backend
-  const returnTemp = backendData?.calculated.return_temp_f || (supplyTemp + 1.0);
+  // Use actual return temperature sensor from backend
+  const returnTemp = backendData?.sensors.return_temp_f || (supplyTemp + 1.0);
   const visualDeltaT = returnTemp - supplyTemp;
   
   const supplyColor = getSupplyColor(supplyTemp);

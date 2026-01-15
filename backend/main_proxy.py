@@ -26,6 +26,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Heat load calculation
+def calculate_heat_load(gpm: float, supply_temp_f: float, return_temp_f: float) -> float:
+    """
+    Calculate heat load using Delta-T method
+    
+    Formula: Q = GPM × 500 × ΔT (BTU/hr) then convert to kW
+    
+    Args:
+        gpm: Flow rate (GPM)
+        supply_temp_f: Basin/supply water temperature (°F)
+        return_temp_f: Return water temperature (°F)
+        
+    Returns:
+        Heat load (kW)
+    """
+    if gpm <= 0:
+        return 0.0
+    
+    delta_t = return_temp_f - supply_temp_f
+    
+    # Heat load in BTU/hr: GPM × 500 × ΔT
+    heat_load_btu = gpm * 500.0 * delta_t
+    
+    # Convert to kW (1 kW = 3412.14 BTU/hr)
+    heat_load_kw = heat_load_btu / 3412.14
+    
+    # Return positive values only
+    return max(0.0, heat_load_kw)
+
 # Flask dashboard URL and credentials
 FLASK_URL = "http://localhost:8001"
 FLASK_USERNAME = "admin"
@@ -214,6 +243,8 @@ def transform_flask_data(flask_data: dict) -> dict:
             "pressure_std": sensors.get('pressure_std', 0.0),
             "basin_temp_f": sensors.get('temperature_f', 0.0),
             "temperature_std": sensors.get('temperature_std', 0.0),
+            "return_temp_f": sensors.get('return_temp_f', 0.0),
+            "return_temp_std": sensors.get('return_temp_std', 0.0),
             "flow_gpm": sensors.get('flow_gpm', 0.0),
             "flow_std": sensors.get('flow_std', 0.0),
             "timestamp": flask_data.get('timestamp', datetime.now().isoformat()),
@@ -246,8 +277,12 @@ def transform_flask_data(flask_data: dict) -> dict:
             "status": "offline"
         },
         "calculated": {
-            "return_temp_f": sensors.get('temperature_f', 0.0) + 10.0,
-            "heat_load_kw": 0.0,
+            "return_temp_f": sensors.get('return_temp_f', 0.0),
+            "heat_load_kw": calculate_heat_load(
+                sensors.get('flow_gpm', 0.0),
+                sensors.get('temperature_f', 0.0),
+                sensors.get('return_temp_f', 0.0)
+            ),
             "gpm": sensors.get('flow_gpm', 0.0),
             "approach_f": 0.0
         },

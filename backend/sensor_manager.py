@@ -37,18 +37,28 @@ class SensorManager:
                 raise Exception(f'No I2C device at address: 0x{i2c_address:02X}')
             self.ads.gain = gain
             
-            # Temperature sensor configuration (NTC thermistor with 1kΩ voltage divider)
-            self.R_FIXED = 1000  # 1kΩ resistor from 3.3V
+            # Temperature sensor configuration (NTC thermistor with 10kΩ voltage divider)
+            self.R_FIXED = 10000  # 10kΩ resistor from 3.3V
             self.V_SUPPLY = 3.3  # Supply voltage
             
-            # Calibration point: 2.141V = 12277Ω = 65°F (18.3°C)
-            self.CAL_VOLTAGE = 2.141
-            self.CAL_TEMP_C = 18.3
-            self.CAL_RESISTANCE = 12277
+            # Calibration: measured 1.827V at 63°F (17.2°C)
+            # Thermistor measured at 14kΩ (voltage divider: 3.3V × 14k/24k = 1.925V theoretical)
+            # Using actual measured voltage for calibration
+            self.CAL_VOLTAGE = 1.827
+            self.CAL_TEMP_C = 17.2  # 63°F
+            # Calculate resistance from measured voltage
+            self.CAL_RESISTANCE = (1.827 * 10000) / (3.3 - 1.827)  # ≈12.4kΩ
             
-            # Estimated thermistor beta coefficient (typical for 10k NTC)
-            # This can be refined with more calibration points
+            # Beta coefficient - adjust if needed with second calibration point
             self.BETA = 3950
+            
+            # Return water temperature sensor (A3) - same thermistor/resistor as basin temp
+            # Reading 1.925V at ~67°F ambient (19.4°C)
+            # Calculated resistance: (1.925 × 10k) / (3.3 - 1.925) = 14,000Ω
+            # Will measure outlet/return water temp when installed
+            self.RETURN_CAL_VOLTAGE = 1.925
+            self.RETURN_CAL_TEMP_C = 19.4  # 67°F
+            self.RETURN_CAL_RESISTANCE = 14000  # Calculated from voltage divider
             
             # Air temperature RTD configuration (100Ω bias resistor)
             # Measures air temp INSIDE cooling tower (above water level)
@@ -61,6 +71,7 @@ class SensorManager:
             self.pressure_buffer = deque(maxlen=10)
             self.temp_buffer = deque(maxlen=10)
             self.flow_buffer = deque(maxlen=10)
+            self.return_temp_buffer = deque(maxlen=10)
             
             logger.info(f'ADS1115 initialized at address 0x{i2c_address:02X}, gain={gain}')
             
@@ -169,17 +180,58 @@ class SensorManager:
             self.temp_buffer.append(temp_f)
             return temp_f
     
+    def read_return_temperature(self):
+        """
+        Read return water temperature from Channel 3 (A3).
+        Same NTC thermistor with 10kΩ voltage divider as basin temp
+        """
+        voltage = self.read_voltage(3)
+        
+        # Avoid division by zero
+        if voltage >= self.V_SUPPLY or voltage < 0.1:
+            return self.RETURN_CAL_TEMP_C * 9/5 + 32
+        
+        # Calculate thermistor resistance from voltage divider
+        r_thermistor = (voltage * self.R_FIXED) / (self.V_SUPPLY - voltage)
+        
+        # Use simplified beta equation with return sensor calibration point
+        t0_kelvin = self.RETURN_CAL_TEMP_C + 273.15
+        
+        try:
+            temp_kelvin = 1.0 / (1.0/t0_kelvin + (1.0/self.BETA) * math.log(r_thermistor / self.RETURN_CAL_RESISTANCE))
+            temp_c = temp_kelvin - 273.15
+            
+            # Sanity check: water temp should be 0-100°C
+            if temp_c < -10 or temp_c > 110:
+                logger.warning(f'Return temp out of range: {temp_c:.1f}°C, using calibration value')
+                temp_f = self.RETURN_CAL_TEMP_C * 9/5 + 32
+            else:
+                temp_f = temp_c * 9/5 + 32  # Convert to Fahrenheit
+            
+            # Add to rolling buffer
+            self.return_temp_buffer.append(temp_f)
+            
+            return temp_f
+                
+        except Exception as e:
+            logger.error(f'Return temp calculation error: {e}, R={r_thermistor:.0f}Ω, V={voltage:.3f}V')
+            temp_f = self.RETURN_CAL_TEMP_C * 9/5 + 32
+            self.return_temp_buffer.append(temp_f)
+            return temp_f
+    
     def read_all(self):
         """Read all sensors and return current values plus statistics"""
         # Read raw values (also populates buffers)
         current_pressure = self.read_pressure()
         current_temp = self.read_temperature()
         current_flow = self.read_flow_gpm()
+        current_return_temp = self.read_return_temperature()
         
         # Calculate statistics from buffers
         pressure_avg, pressure_std = self._calc_stats(self.pressure_buffer)
         temp_avg, temp_std = self._calc_stats(self.temp_buffer)
         flow_avg, flow_std = self._calc_stats(self.flow_buffer)
+        return_temp_avg, return_temp_std = self._calc_stats(self.return_temp_buffer)
         
         return {
             'pressure_psi': pressure_avg,
@@ -187,5 +239,7 @@ class SensorManager:
             'temperature_f': temp_avg,
             'temperature_std': temp_std,
             'flow_gpm': flow_avg,
-            'flow_std': flow_std
+            'flow_std': flow_std,
+            'return_temp_f': return_temp_avg,
+            'return_temp_std': return_temp_std
         }

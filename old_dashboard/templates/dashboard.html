@@ -215,6 +215,10 @@
                     <span class="metric-value" id="temperature">-- °F</span>
                 </div>
                 <div class="metric">
+                    <span class="metric-label">Return Temperature</span>
+                    <span class="metric-value" id="returnTemp">-- °F</span>
+                </div>
+                <div class="metric">
                     <span class="metric-label">Flow Rate</span>
                     <span class="metric-value" id="flowRate">-- GPM</span>
                 </div>
@@ -344,6 +348,10 @@
                 const temp = data.sensors.temperature_f.toFixed(1);
                 const tempStd = data.sensors.temperature_std?.toFixed(1) || '0.0';
                 document.getElementById('temperature').textContent = `${temp} ±${tempStd} °F`;
+                
+                const returnTemp = data.sensors.return_temp_f?.toFixed(1) || '--';
+                const returnTempStd = data.sensors.return_temp_std?.toFixed(1) || '0.0';
+                document.getElementById('returnTemp').textContent = `${returnTemp} ±${returnTempStd} °F`;
                 
                 const flow = data.sensors.flow_gpm.toFixed(1);
                 const flowStd = data.sensors.flow_std?.toFixed(1) || '0.0';
