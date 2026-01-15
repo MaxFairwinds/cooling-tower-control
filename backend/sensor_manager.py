@@ -117,6 +117,7 @@ class SensorManager:
         150 ohm current sensing resistor:
           4mA = 0.6V = 0 GPM
           20mA = 3.0V = 1000 GPM
+        Calibration: 225 GPM on meter display = 200 GPM raw → scale factor 1.125
         """
         voltage = self.read_voltage(2)
         
@@ -124,12 +125,13 @@ class SensorManager:
         V_MIN = 0.6   # 4mA × 150Ω
         V_MAX = 3.0   # 20mA × 150Ω
         GPM_MAX = 1000.0
+        CALIBRATION_FACTOR = 1.125  # 225/200 = 1.125
         
         if voltage < V_MIN:
             gpm = 0.0
         else:
-            gpm = (voltage - V_MIN) / (V_MAX - V_MIN) * GPM_MAX
-            gpm = max(0.0, min(GPM_MAX, gpm))
+            gpm = (voltage - V_MIN) / (V_MAX - V_MIN) * GPM_MAX * CALIBRATION_FACTOR
+            gpm = max(0.0, min(GPM_MAX * CALIBRATION_FACTOR, gpm))
         
         # Add to rolling buffer
         self.flow_buffer.append(gpm)

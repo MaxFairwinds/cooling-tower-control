@@ -218,7 +218,12 @@ def transform_flask_data(flask_data: dict) -> dict:
     # }
     
     # Get real weather data
-    weather_data = state.weather_service.get_data() if state.weather_service else {}
+    weather_data = {}
+    if state.weather_service:
+        weather_data = state.weather_service.get_data()
+        logger.debug(f"Weather data: temp={weather_data.get('temp_f')}, wb={weather_data.get('wet_bulb_f')}, status={weather_data.get('status')}")
+    else:
+        logger.warning("Weather service not initialized")
     
     # Map Flask VFD states to frontend-expected states
     def map_state(flask_state: str) -> str:
@@ -270,11 +275,11 @@ def transform_flask_data(flask_data: dict) -> dict:
         },
         "active_pump": flask_data.get('active_pump', 'primary'),
         "weather": {
-            "outdoor_temp_f": 65.0,
-            "humidity_pct": 50.0,
-            "wet_bulb_f": 55.0,
-            "last_update": datetime.now().isoformat(),
-            "status": "offline"
+            "outdoor_temp_f": weather_data.get('temp_f', 65.0),
+            "humidity_pct": weather_data.get('humidity', 50.0),
+            "wet_bulb_f": weather_data.get('wet_bulb_f', 55.0),
+            "last_update": weather_data.get('last_update', datetime.now().isoformat()),
+            "status": weather_data.get('status', 'offline')
         },
         "calculated": {
             "return_temp_f": sensors.get('return_temp_f', 0.0),
@@ -284,7 +289,7 @@ def transform_flask_data(flask_data: dict) -> dict:
                 sensors.get('return_temp_f', 0.0)
             ),
             "gpm": sensors.get('flow_gpm', 0.0),
-            "approach_f": 0.0
+            "approach_f": max(0.0, sensors.get('temperature_f', 0.0) - weather_data.get('wet_bulb_f', 0.0))
         },
         "fan_auto_mode": False,
         "fan_setpoint": fan.get('frequency', 0.0)
