@@ -291,7 +291,7 @@ export const App: React.FC = () => {
     autoControl: false,
     activePump: 'PRIMARY',
     temperature: 0,
-    basinLevel: 0,
+    basinLevel: 50,
     outdoorTemp: 0,
     humidity: 0,
     heatLoad: 0,
@@ -354,7 +354,7 @@ export const App: React.FC = () => {
         autoControl: backendData.fan_auto_mode,
         activePump: newActivePump,
         temperature: backendData.sensors.basin_temp_f,
-        basinLevel: 0, // No sensor yet
+        basinLevel: 50, // Fixed at 50% (no level sensor installed)
         outdoorTemp: backendData.weather.outdoor_temp_f,
         humidity: backendData.weather.humidity_pct,
         heatLoad: backendData.calculated.heat_load_kw,

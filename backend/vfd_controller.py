@@ -21,6 +21,8 @@ class VFDController:
         self.device_id = device_id
         self.description = description
         self.error_count = 0
+        self.last_good_status = None  # Cache for last successful read
+        self.last_good_time = 0  # Timestamp of last successful read
         
         # GALT G540 Register Map
         self.REG_CONTROL = 0x2000      # Control command
@@ -91,8 +93,8 @@ class VFDController:
             self.error_count += 1
             return False
 
-    def read_register(self, register, count=1):
-        """Read holding registers (function code 0x03)"""
+    def read_register(self, register, count=1, retry=True):
+        """Read holding registers (function code 0x03) with retry logic"""
         try:
             request = bytes([
                 self.device_id,
@@ -107,14 +109,22 @@ class VFDController:
             self.ser.reset_input_buffer()
             self.ser.reset_output_buffer()
             self.ser.write(request)
-            time.sleep(0.05)
+            time.sleep(0.05)  # Wait for VFD to process
             
-            response = self.ser.read(256)
+            # Read response efficiently: header (3 bytes) + byte_count byte + data + CRC (2 bytes)
+            # For count registers: 3 + 1 + (count * 2) + 2 bytes
+            expected_bytes = 5 + (count * 2)
+            response = self.ser.read(expected_bytes)
             
             if len(response) < 5:
-                logger.error(f"[{self.description}] Read timeout")
-                self.error_count += 1
-                return None
+                if retry:
+                    logger.warning(f"[{self.description}] Read timeout, retrying...")
+                    time.sleep(0.1)
+                    return self.read_register(register, count, retry=False)
+                else:
+                    logger.error(f"[{self.description}] Read timeout (retry failed)")
+                    self.error_count += 1
+                    return None
             
             if response[-2:] != self.crc16(response[:-2]):
                 logger.error(f"[{self.description}] Read CRC error")
@@ -164,11 +174,38 @@ class VFDController:
         return self.write_register(self.REG_FREQ_SET, value)
 
     def get_status(self):
-        """Get VFD status and measurements"""
-        state1 = self.read_register(self.REG_STATE_1)
+        """Get VFD status and measurements (optimized with batch reads + caching)"""
+        start_time = time.time()
+        logger.info(f"[{self.description}] Starting VFD status read...")
+        
+        # Batch read status registers (0x2100-0x2102) - 3 consecutive registers  
+        # Reads STATE_1, STATE_2, and FAULT in one transaction
+        read1_start = time.time()
+        status_regs = self.read_register(self.REG_STATE_1, count=3)
+        read1_time = time.time() - read1_start
+        
+        if status_regs and len(status_regs) >= 3:
+            state1 = status_regs[0]
+            fault = status_regs[2]
+            logger.info(f"[{self.description}] Status registers read OK ({read1_time:.3f}s): state=0x{state1:04X}, fault={fault}")
+        else:
+            state1 = None
+            fault = None
+            logger.error(f"[{self.description}] Status registers FAILED ({read1_time:.3f}s)")
+        
+        # Read runtime data separately (different address range)
+        read2_start = time.time()
         run_freq = self.read_register(self.REG_RUN_FREQ)
-        fault = self.read_register(self.REG_FAULT)
+        read2_time = time.time() - read2_start
+        
+        read3_start = time.time()
         current = self.read_register(self.REG_OUTPUT_CURRENT)
+        read3_time = time.time() - read3_start
+        
+        if run_freq is not None and current is not None:
+            logger.info(f"[{self.description}] Runtime registers read OK (freq={read2_time:.3f}s, current={read3_time:.3f}s)")
+        else:
+            logger.error(f"[{self.description}] Runtime registers FAILED (freq={read2_time:.3f}s, current={read3_time:.3f}s) - freq={run_freq}, current={current}")
         
         # Decode state word 1
         state_map = {
@@ -180,13 +217,30 @@ class VFDController:
             0x0006: "PreExcited"
         }
         
-        return {
+        current_status = {
             "state": state_map.get(state1, "Unknown") if state1 else "NoComm",
             "output_frequency": (run_freq * 0.01) if run_freq else 0.0,
             "fault_code": fault if fault else 0,
             "output_current": (current * 0.1) if current else 0.0,
             "healthy": self.error_count == 0
         }
+        
+        total_time = time.time() - start_time
+        logger.info(f"[{self.description}] VFD status read complete: {total_time:.3f}s total, state={current_status['state']}, freq={current_status['output_frequency']:.1f}Hz, current={current_status['output_current']:.1f}A")
+        
+        # Cache successful reads, return cached data if read fails within 30 seconds
+        if state1 is not None:
+            self.last_good_status = current_status.copy()
+            self.last_good_time = time.time()
+            return current_status
+        else:
+            # Read failed - check if we have recent cached data
+            if self.last_good_status and (time.time() - self.last_good_time) < 30:
+                logger.warning(f"[{self.description}] Using cached status (age: {time.time() - self.last_good_time:.1f}s)")
+                return self.last_good_status
+            else:
+                logger.error(f"[{self.description}] Returning NoComm - no recent cached data available")
+                return current_status  # Return NoComm state
     
     def is_healthy(self, max_errors=3):
         """Check if VFD is responding properly"""
@@ -196,7 +250,7 @@ class VFDController:
 class MultiVFDManager:
     """Manager for multiple GALT G540 VFDs on the same RS-485 bus"""
     
-    def __init__(self, port='/dev/ttyUSB0', baudrate=19200, parity='E', stopbits=1, bytesize=8, timeout=1.0):
+    def __init__(self, port='/dev/ttyUSB0', baudrate=9600, parity='E', stopbits=1, bytesize=8, timeout=0.5):
         """
         Initialize the multi-VFD manager.
         

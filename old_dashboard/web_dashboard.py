@@ -376,10 +376,10 @@ if __name__ == '__main__':
             time.sleep(0.5)
     
     def vfd_update_thread():
-        """Slow VFD status updates every 10 seconds"""
+        """VFD status updates every 3 seconds"""
         while True:
             system.update_vfds()
-            time.sleep(10.0)
+            time.sleep(3.0)
     
     threading.Thread(target=update_thread, daemon=True).start()
     threading.Thread(target=vfd_update_thread, daemon=True).start()
